@@ -282,7 +282,10 @@ impl GpuGraph {
                 },
             )
         };
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     pub fn latest_sample(&self) -> f64 {
@@ -521,7 +524,10 @@ impl VramGraph {
                 },
             )
         };
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     pub fn latest_sample(&self) -> f64 {
@@ -709,7 +715,10 @@ impl TempGraph {
                 colors,
             ),
         };
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     pub fn value_style(&self) -> cosmic::theme::Text {
@@ -1010,6 +1019,7 @@ impl Gpu {
         let id = self.id();
         let chart_id = self.id();
         let value_id = self.id();
+        let width_id = self.id();
 
         settings::section()
             .add(
@@ -1034,6 +1044,9 @@ impl Gpu {
                 kind,
                 move |choice| Message::GpuSelectGraphType(id.clone(), DeviceKind::Gpu, choice),
             ))
+            .add(ui::chart_width_row(config.chart_width(), move |percent| {
+                Message::ChartWidthChanged(DeviceKind::Gpu, Some(width_id.clone()), percent)
+            }))
             .add(ui::chart_color_row(
                 config.colors().graph1,
                 Message::ColorPickerOpen(DeviceKind::Gpu, kind, Some(self.id())),
@@ -1050,6 +1063,7 @@ impl Gpu {
         let id = self.id();
         let chart_id = self.id();
         let value_id = self.id();
+        let width_id = self.id();
 
         settings::section()
             .add(
@@ -1074,6 +1088,9 @@ impl Gpu {
                 kind,
                 move |choice| Message::GpuSelectGraphType(id.clone(), DeviceKind::Vram, choice),
             ))
+            .add(ui::chart_width_row(config.chart_width(), move |percent| {
+                Message::ChartWidthChanged(DeviceKind::Vram, Some(width_id.clone()), percent)
+            }))
             .add(ui::chart_color_row(
                 config.colors().graph1,
                 Message::ColorPickerOpen(DeviceKind::Vram, kind, Some(self.id())),
@@ -1092,6 +1109,7 @@ impl Gpu {
         let min_temp_id = self.id();
         let chart_id = self.id();
         let value_id = self.id();
+        let width_id = self.id();
 
         settings::section()
             .add(
@@ -1130,6 +1148,9 @@ impl Gpu {
                     Message::GpuSelectGraphType(graph_id.clone(), DeviceKind::GpuTemp, choice)
                 },
             ))
+            .add(ui::chart_width_row(config.chart_width(), move |percent| {
+                Message::ChartWidthChanged(DeviceKind::GpuTemp, Some(width_id.clone()), percent)
+            }))
             .add(ui::chart_color_row(
                 ui::chart_swatch(config.colors(), kind),
                 Message::ColorPickerOpen(DeviceKind::GpuTemp, kind, Some(self.id())),

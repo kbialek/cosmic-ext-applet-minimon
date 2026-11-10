@@ -200,6 +200,26 @@ pub fn chart_type_row<'a>(
     )
 }
 
+/// The `Chart width` row: what percentage of the room the panel offers a chart
+/// the chart takes. It is redrawn at that width, so a narrow chart is a narrow
+/// chart rather than a clipped one.
+pub fn chart_width_row<'a>(
+    percent: u16,
+    on_change: impl Fn(f64) -> Message + 'static,
+) -> Element<'a, Message> {
+    control_row(
+        fl!("chart-width"),
+        widget::spin_button(
+            percent.to_string(),
+            f64::from(percent),
+            5.0,
+            25.0,
+            100.0,
+            on_change,
+        ),
+    )
+}
+
 /// The `Chart color` row, opening the color picker for the sensor.
 pub fn chart_color_row<'a>(color: Srgba<u8>, on_press: Message) -> Element<'a, Message> {
     control_row(fl!("chart-color"), color_swatch(color, on_press))

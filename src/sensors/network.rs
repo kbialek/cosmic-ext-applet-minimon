@@ -352,7 +352,10 @@ impl Sensor for Network {
                 }
             }
         };
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     fn settings_ui(&'_ self) -> Element<'_, crate::app::Message> {
@@ -415,6 +418,9 @@ impl Sensor for Network {
                 config.chart,
                 move |choice| Message::SelectGraphType(DeviceKind::Network(variant), choice),
             ))
+            .add(ui::chart_width_row(config.chart_width(), move |percent| {
+                Message::ChartWidthChanged(DeviceKind::Network(variant), None, percent)
+            }))
             .add(ui::chart_color_row(
                 swatch,
                 Message::ColorPickerOpen(DeviceKind::Network(variant), config.chart, None),

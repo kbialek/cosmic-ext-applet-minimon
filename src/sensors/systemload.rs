@@ -139,7 +139,10 @@ impl Sensor for SystemLoad {
             self.config.colors(),
             Some(self.logical_cpus as f64),
         );
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     fn settings_ui(&self) -> Element<'_, Message> {
@@ -166,6 +169,10 @@ impl Sensor for SystemLoad {
                 settings::item::builder(fl!("enable-icon"))
                     .toggler(self.config.icon_visible(), Message::ToggleSystemLoadIcon),
             )
+            .add(crate::ui::chart_width_row(
+                self.config.chart_width(),
+                move |percent| Message::ChartWidthChanged(DeviceKind::SystemLoad, None, percent),
+            ))
             .add(crate::ui::chart_colors_row(
                 self.config.colors().graph1,
                 Message::ColorPickerOpen(DeviceKind::SystemLoad, ChartKind::Line, None),

@@ -512,6 +512,84 @@ pub fn line_adaptive(
     svg
 }
 
+/// The value of an attribute of the root element, if it has one.
+fn root_attribute(root: &str, name: &str) -> Option<String> {
+    let pattern = format!(r#"{name}=""#);
+    let start = root.find(&pattern)? + pattern.len();
+    Some(root[start..].split('"').next()?.to_owned())
+}
+
+/// Cut an attribute out of the root element, along with the space before it.
+fn drop_root_attribute(root: &mut String, name: &str) {
+    let pattern = format!(r#"{name}=""#);
+    let Some(at) = root.find(&pattern) else {
+        return;
+    };
+    let start = usize::from(at > 0 && root.as_bytes()[at - 1] == b' ');
+    let start = at - start;
+    let end = root[at + pattern.len()..]
+        .find('"')
+        .map(|offset| at + pattern.len() + offset + 1)
+        .unwrap_or(root.len());
+    root.replace_range(start..end, "");
+}
+
+/// Draw a chart narrower than it is tall, at the given percentage of its width.
+///
+/// Charts are authored in a square coordinate system, and the panel's renderer
+/// scales a chart into its slot without stretching it: a chart that is only
+/// given half the room is drawn full height and clipped. So a narrow chart has
+/// to *be* narrow - the root takes the size it is drawn at and stretches its
+/// square coordinate system into it, which keeps the height the panel expects
+/// and squeezes the drawing sideways.
+pub fn narrow(svg: String, percent: u16) -> String {
+    let percent = percent.clamp(25, 100);
+    if percent == 100 {
+        return svg;
+    }
+
+    // Only the root element carries the size the renderer fits the chart into.
+    let Some(cut) = svg.find('>') else {
+        return svg;
+    };
+    let (root, rest) = svg.split_at(cut);
+    let self_closing = root.ends_with('/');
+    let mut root = root.to_owned();
+    if self_closing {
+        root.pop();
+    }
+
+    // A chart either spells its size out or leaves it to the viewBox, and the
+    // stacked bar chart is as wide as the machine has cores, so the width that
+    // gets the percentage is whichever of the two the chart declares.
+    let view_box: Vec<f64> = root_attribute(&root, "viewBox")
+        .map(|view_box| {
+            view_box
+                .split_whitespace()
+                .filter_map(|side| side.parse().ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    let side = |attribute: &str, index: usize, fallback: f64| {
+        root_attribute(&root, attribute)
+            .and_then(|size| size.parse::<f64>().ok())
+            .or_else(|| view_box.get(index).copied())
+            .unwrap_or(fallback)
+    };
+    let height = side("height", 3, 42.0);
+    let width = (side("width", 2, height) * f64::from(percent) / 100.0).max(1.0);
+
+    for name in ["width", "height", "preserveAspectRatio"] {
+        drop_root_attribute(&mut root, name);
+    }
+    let _ = write!(
+        root,
+        r#" width="{width}" height="{height}" preserveAspectRatio="none""#
+    );
+
+    root + rest
+}
+
 /// Left edge of the drawing area inside the 42x42 frame.
 const BAR_LEFT: f64 = 1.0;
 /// Width of the drawing area, and the height a bar filled to 100% gets.
@@ -934,6 +1012,26 @@ mod tests {
         assert_eq!(level_percent(500.0, 1000.0), 50.0);
         assert_eq!(level_percent(5000.0, 1000.0), 100.0);
         assert_eq!(level_percent(1.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn narrow_charts_keep_their_height_and_lose_width() {
+        let colors = SvgColors::new(&ChartColors::default());
+        let full = level_bars(&[50.0], &[LevelFill::Graph1], true, &colors);
+        let half = narrow(full.clone(), 50);
+
+        // The renderer fits the root's own size into the slot, so the root is
+        // what has to change, and it has to say it may be stretched.
+        assert!(full.starts_with(r#"<svg width="42" height="42" viewBox="0 0 42 42""#));
+        assert!(half.starts_with(r#"<svg viewBox="0 0 42 42""#));
+        assert!(half.contains(r#"width="21" height="42" preserveAspectRatio="none""#));
+        assert_eq!(half.matches("<rect").count(), full.matches("<rect").count());
+
+        // The full width is left exactly as it was, and a chart that declares no
+        // size at all is measured by its viewBox.
+        assert_eq!(narrow(full.clone(), 100), full);
+        let ring = r#"<svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg"/>"#;
+        assert!(narrow(ring.to_owned(), 50).contains(r#"width="17" height="34""#));
     }
 
     #[test]

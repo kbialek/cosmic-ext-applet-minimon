@@ -333,7 +333,10 @@ impl Sensor for Memory {
         } else {
             crate::svg_graph::line(&self.samples_used, self.total_memory, &self.svg_colors)
         };
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     fn settings_ui(&'_ self) -> Element<'_, crate::app::Message> {
@@ -375,6 +378,9 @@ impl Sensor for Memory {
                 kind,
                 move |choice| Message::SelectGraphType(DeviceKind::Memory, choice),
             ))
+            .add(ui::chart_width_row(config.chart_width(), move |percent| {
+                Message::ChartWidthChanged(DeviceKind::Memory, None, percent)
+            }))
             .add(ui::chart_color_row(
                 config.colors().graph1,
                 Message::ColorPickerOpen(DeviceKind::Memory, kind, None),

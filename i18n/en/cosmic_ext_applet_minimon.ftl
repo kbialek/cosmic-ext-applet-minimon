@@ -91,6 +91,7 @@ settings-launch = Launch { $name }
 settings-about = About
 links-main = Repository
 links-issues = Support
+chart-width = Chart width (%)
 chart-color = Chart color
 settings-power-saving-mode = Power saving mode
 tab-load = Load

@@ -301,6 +301,8 @@ macro_rules! make_config {
         #[serde(default)]
         #[version = 1]
         pub struct $name {
+            /// Width of the chart as a percentage of the room the panel offers.
+            pub chart_width: u16,
             chart_visible: bool,
             value_visible: bool,
             label_visible: bool,
@@ -312,6 +314,11 @@ macro_rules! make_config {
         }
 
        impl $name {
+            /// The chart width clamped to the range the setting offers.
+            pub fn chart_width(&self) -> u16 {
+                self.chart_width.clamp(25, 100)
+            }
+
               pub fn visible(&self) -> bool {
                 self.chart_visible() || self.value_visible()
             }
@@ -361,6 +368,7 @@ make_config!(CpuConfig {
 impl Default for CpuConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: true,
             value_visible: false,
             label_visible: false,
@@ -383,6 +391,7 @@ make_config!(CpuTempConfig {
 impl Default for CpuTempConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: false,
             value_visible: false,
             label_visible: false,
@@ -401,6 +410,7 @@ make_config!(SystemLoadConfig {});
 impl Default for SystemLoadConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: false,
             value_visible: false,
             label_visible: false,
@@ -421,6 +431,7 @@ make_config!(MemoryConfig {
 impl Default for MemoryConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: true,
             value_visible: false,
             label_visible: false,
@@ -455,6 +466,7 @@ make_config!(NetworkConfig {
 impl Default for NetworkConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: true,
             value_visible: false,
             label_visible: false,
@@ -486,6 +498,7 @@ make_config!(DisksConfig {
 impl Default for DisksConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: false,
             value_visible: false,
             label_visible: false,
@@ -503,6 +516,7 @@ make_config!(GpuUsageConfig {});
 impl Default for GpuUsageConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: true,
             value_visible: false,
             label_visible: false,
@@ -519,6 +533,7 @@ make_config!(GpuVramConfig {});
 impl Default for GpuVramConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: true,
             value_visible: false,
             label_visible: false,
@@ -538,6 +553,7 @@ make_config!(GpuTempConfig {
 impl Default for GpuTempConfig {
     fn default() -> Self {
         Self {
+            chart_width: 100,
             chart_visible: false,
             value_visible: false,
             label_visible: false,

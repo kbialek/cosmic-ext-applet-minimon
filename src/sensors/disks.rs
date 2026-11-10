@@ -321,7 +321,10 @@ impl Sensor for Disks {
                 }
             }
         };
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     fn settings_ui(&'_ self) -> Element<'_, crate::app::Message> {
@@ -358,6 +361,9 @@ impl Sensor for Disks {
                 config.chart,
                 move |choice| Message::SelectGraphType(DeviceKind::Disks(variant), choice),
             ))
+            .add(ui::chart_width_row(config.chart_width(), move |percent| {
+                Message::ChartWidthChanged(DeviceKind::Disks(variant), None, percent)
+            }))
             .add(ui::chart_color_row(
                 swatch,
                 Message::ColorPickerOpen(DeviceKind::Disks(variant), config.chart, None),

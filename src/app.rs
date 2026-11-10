@@ -107,6 +107,13 @@ pub static SYSMON_LIST: LazyLock<BTreeMap<String, system_monitors::DesktopApp>> 
 pub static SYSMON_NAMES: LazyLock<Vec<&'static str>> =
     LazyLock::new(|| SYSMON_LIST.values().map(|app| app.name.as_str()).collect());
 
+/// The width a chart is drawn at: the room the panel offers for it, scaled by
+/// the sensor's `Chart width` setting. The chart is drawn to match, so the
+/// panel shrinks with it instead of clipping the chart.
+fn slot_width(width: u16, percent: u16) -> u16 {
+    ((u32::from(width) * u32::from(percent.clamp(25, 100))) / 100).max(1) as u16
+}
+
 macro_rules! network_select {
     ($self:ident, $variant:expr) => {
         match $variant {
@@ -265,6 +272,7 @@ pub enum Message {
     ToggleDisksIcon(DisksVariant, bool),
 
     SelectGraphType(DeviceKind, ChartKind),
+    ChartWidthChanged(DeviceKind, Option<String>, f64),
     Tick,
     SlowTimer,
     PopupClosed(Id),
@@ -919,6 +927,43 @@ impl cosmic::Application for Minimon {
                 self.save_config();
             }
 
+            Message::ChartWidthChanged(device, id, percent) => {
+                let percent = (percent.round() as u16).clamp(25, 100);
+                match device {
+                    DeviceKind::Cpu => self.config.cpu.chart_width = percent,
+                    DeviceKind::CpuTemp => self.config.cputemp.chart_width = percent,
+                    DeviceKind::SystemLoad => self.config.systemload.chart_width = percent,
+                    DeviceKind::Memory => self.config.memory.chart_width = percent,
+                    DeviceKind::Network(variant) => {
+                        let (_, config) = network_select!(self, variant);
+                        config.chart_width = percent;
+                    }
+                    DeviceKind::Disks(variant) => {
+                        let (_, config) = disks_select!(self, variant);
+                        config.chart_width = percent;
+                    }
+                    device @ (DeviceKind::Gpu | DeviceKind::Vram | DeviceKind::GpuTemp) => {
+                        match id.as_deref() {
+                            Some(id) => self.update_gpu_config(
+                                id,
+                                "ChartWidthChanged",
+                                device,
+                                |config, device| match device {
+                                    DeviceKind::Gpu => config.usage.chart_width = percent,
+                                    DeviceKind::Vram => config.vram.chart_width = percent,
+                                    DeviceKind::GpuTemp => config.temp.chart_width = percent,
+                                    _ => error!("ChartWidthChanged: wrong kind {device:?}"),
+                                },
+                            ),
+                            None => error!("ChartWidthChanged: no GPU to change the width of"),
+                        }
+                        // update_gpu_config has saved the configuration already.
+                        return Task::none();
+                    }
+                }
+                self.save_config();
+            }
+
             Message::TextInputBandwidthChanged(variant, string) => {
                 let value = if string.is_empty() {
                     Some(0)
@@ -1513,9 +1558,10 @@ impl Minimon {
     /// Scales a chart down to the preview shown in a sensor page header.
     fn chart_preview(
         chart: widget::Container<'_, Message, cosmic::Theme, cosmic::Renderer>,
+        percent: u16,
     ) -> Element<'_, Message> {
         chart
-            .width(ui::PREVIEW_SIZE)
+            .width(slot_width(ui::PREVIEW_SIZE, percent))
             .height(ui::PREVIEW_SIZE)
             .into()
     }
@@ -1792,7 +1838,10 @@ impl Minimon {
                         .class(self.cputemp.value_style())
                         .into(),
                 ],
-                Minimon::chart_preview(self.cputemp.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE)),
+                Minimon::chart_preview(
+                    self.cputemp.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE),
+                    self.config.cputemp.chart_width(),
+                ),
                 vec![self.cputemp.settings_ui()],
             );
         }
@@ -1811,11 +1860,14 @@ impl Minimon {
             let width = natural.min(ui::PREVIEW_MAX_WIDTH);
             self.cpu
                 .chart(ui::PREVIEW_SIZE, natural)
-                .width(width)
+                .width(slot_width(width, self.config.cpu.chart_width()))
                 .height(ui::PREVIEW_SIZE)
                 .into()
         } else {
-            Minimon::chart_preview(self.cpu.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE))
+            Minimon::chart_preview(
+                self.cpu.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE),
+                self.config.cpu.chart_width(),
+            )
         };
 
         self.sensor_page(
@@ -1849,6 +1901,7 @@ impl Minimon {
                         values,
                         Minimon::chart_preview(
                             self.systemload.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE),
+                            self.config.systemload.chart_width(),
                         ),
                     ))
                     .push(cosmic::widget::text::caption(fl!(
@@ -1882,7 +1935,10 @@ impl Minimon {
             *SETTINGS_MEMORY_CHOICE,
             None,
             values,
-            Minimon::chart_preview(self.memory.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE)),
+            Minimon::chart_preview(
+                self.memory.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE),
+                self.config.memory.chart_width(),
+            ),
             vec![
                 self.memory.settings_ui(),
                 widget::text::caption(fl!("allocated-explanation")).into(),
@@ -1961,7 +2017,14 @@ impl Minimon {
             *SETTINGS_NETWORK_CHOICE,
             None,
             values,
-            Minimon::chart_preview(network.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE)),
+            Minimon::chart_preview(
+                network.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE),
+                if upload {
+                    self.config.network2.chart_width()
+                } else {
+                    self.config.network1.chart_width()
+                },
+            ),
             vec![network.settings_ui(), device.into()],
         )
     }
@@ -2031,7 +2094,14 @@ impl Minimon {
             *SETTINGS_DISKS_CHOICE,
             None,
             values,
-            Minimon::chart_preview(disk.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE)),
+            Minimon::chart_preview(
+                disk.chart(ui::PREVIEW_SIZE, ui::PREVIEW_SIZE),
+                if read {
+                    self.config.disks2.chart_width()
+                } else {
+                    self.config.disks1.chart_width()
+                },
+            ),
             vec![disk.settings_ui(), device.into()],
         )
     }
@@ -2045,17 +2115,17 @@ impl Minimon {
         let (value, preview, section) = match self.settings_tab() {
             Some(SettingsTab::GpuTemp) => (
                 gpu.temp.to_string(),
-                Minimon::chart_preview(gpu.temp.chart()),
+                Minimon::chart_preview(gpu.temp.chart(), config.temp.chart_width()),
                 gpu.settings_temp_ui(&config.temp),
             ),
             Some(SettingsTab::GpuVram) => (
                 gpu.vram.string(false),
-                Minimon::chart_preview(gpu.vram.chart()),
+                Minimon::chart_preview(gpu.vram.chart(), config.vram.chart_width()),
                 gpu.settings_vram_ui(&config.vram),
             ),
             _ => (
                 gpu.gpu.to_string(),
-                Minimon::chart_preview(gpu.gpu.chart()),
+                Minimon::chart_preview(gpu.gpu.chart(), config.usage.chart_width()),
                 gpu.settings_usage_ui(&config.usage),
             ),
         };
@@ -2168,7 +2238,7 @@ impl Minimon {
                 self.cpu
                     .chart(size.0, width)
                     .height(size.0)
-                    .width(width)
+                    .width(slot_width(width, self.config.cpu.chart_width()))
                     .into(),
             );
         }
@@ -2209,7 +2279,7 @@ impl Minimon {
                     self.cputemp
                         .chart(size.0, size.1)
                         .height(size.0)
-                        .width(size.1)
+                        .width(slot_width(size.1, self.config.cputemp.chart_width()))
                         .into(),
                 );
             }
@@ -2269,7 +2339,7 @@ impl Minimon {
                 self.systemload
                     .chart(size.0, size.1)
                     .height(size.0)
-                    .width(size.1)
+                    .width(slot_width(size.1, self.config.systemload.chart_width()))
                     .into(),
             );
         }
@@ -2308,7 +2378,7 @@ impl Minimon {
                 self.memory
                     .chart(size.0, size.1)
                     .height(size.0)
-                    .width(size.1)
+                    .width(slot_width(size.1, self.config.memory.chart_width()))
                     .into(),
             );
         }
@@ -2392,7 +2462,7 @@ impl Minimon {
                 self.network1
                     .chart(size.0, size.1)
                     .height(size.0)
-                    .width(size.1)
+                    .width(slot_width(size.1, self.config.network1.chart_width()))
                     .into(),
             );
         }
@@ -2423,7 +2493,7 @@ impl Minimon {
                 self.network2
                     .chart(size.0, size.1)
                     .height(size.0)
-                    .width(size.1)
+                    .width(slot_width(size.1, self.config.network2.chart_width()))
                     .into(),
             );
         }
@@ -2506,7 +2576,7 @@ impl Minimon {
                 self.disks1
                     .chart(size.0, size.1)
                     .height(size.0)
-                    .width(size.1)
+                    .width(slot_width(size.1, self.config.disks1.chart_width()))
                     .into(),
             );
         }
@@ -2535,7 +2605,7 @@ impl Minimon {
                 self.disks2
                     .chart(size.0, size.1)
                     .height(size.0)
-                    .width(size.1)
+                    .width(slot_width(size.1, self.config.disks2.chart_width()))
                     .into(),
             );
         }
@@ -2594,7 +2664,13 @@ impl Minimon {
             }
 
             if config.usage.chart_visible() {
-                elements.push_back(gpu.gpu.chart().height(size.0).width(size.1).into());
+                elements.push_back(
+                    gpu.gpu
+                        .chart()
+                        .height(size.0)
+                        .width(slot_width(size.1, config.usage.chart_width()))
+                        .into(),
+                );
             }
             if config.temp.value_visible() {
                 elements.push_back(
@@ -2605,7 +2681,13 @@ impl Minimon {
             }
 
             if config.temp.chart_visible() {
-                elements.push_back(gpu.temp.chart().height(size.0).width(size.1).into());
+                elements.push_back(
+                    gpu.temp
+                        .chart()
+                        .height(size.0)
+                        .width(slot_width(size.1, config.temp.chart_width()))
+                        .into(),
+                );
             }
 
             if config.vram.value_visible() && !stacked_values {
@@ -2617,7 +2699,13 @@ impl Minimon {
             }
 
             if config.vram.chart_visible() {
-                elements.push_back(gpu.vram.chart().height(size.0).width(size.1).into());
+                elements.push_back(
+                    gpu.vram
+                        .chart()
+                        .height(size.0)
+                        .width(slot_width(size.1, config.vram.chart_width()))
+                        .into(),
+                );
             }
         }
 

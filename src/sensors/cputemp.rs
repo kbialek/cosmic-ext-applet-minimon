@@ -328,7 +328,10 @@ impl Sensor for CpuTemp {
                 &self.svg_colors,
             ),
         };
-        super::svg_icon_container::<Message>(svg)
+        super::svg_icon_container::<Message>(crate::svg_graph::narrow(
+            svg,
+            self.config.chart_width(),
+        ))
     }
 
     fn settings_ui(&'_ self) -> Element<'_, crate::app::Message> {
@@ -380,6 +383,9 @@ impl Sensor for CpuTemp {
                 kind,
                 move |choice| Message::SelectGraphType(DeviceKind::CpuTemp, choice),
             ))
+            .add(ui::chart_width_row(config.chart_width(), move |percent| {
+                Message::ChartWidthChanged(DeviceKind::CpuTemp, None, percent)
+            }))
             .add(ui::chart_color_row(
                 ui::chart_swatch(config.colors(), kind),
                 Message::ColorPickerOpen(DeviceKind::CpuTemp, kind, None),

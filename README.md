@@ -30,6 +30,15 @@ Every sensor offers the charts it can draw in its `Chart type` dropdown:
   chart's colors: the first fills the bar, the second paints the track of a
   single bar.
 
+## Chart width
+
+Each sensor draws its chart at the width the panel gives it. The `Chart width`
+setting of a sensor takes a percentage of that room, from 25% to 100%, so a
+sensor whose chart is only a gauge can be given half the width it would
+otherwise take. The chart is redrawn at the chosen width - it is squeezed
+sideways, keeping its height, rather than cut off - and the panel shrinks with
+it.
+
 ![Image](cosmic-applet-minimon.png)
 
 
