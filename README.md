@@ -39,6 +39,14 @@ otherwise take. The chart is redrawn at the chosen width - it is squeezed
 sideways, keeping its height, rather than cut off - and the panel shrinks with
 it.
 
+## Label orientation
+
+The labels of the sensors (`CPU`, `TEMP`, `MEM`, `NET`, `DISK`, `GPU`, `LOAD`) are
+printed left to right. `Label orientation` in the general settings can print
+them top to bottom instead: one character below the next, with the characters
+themselves upright - a label that stands up rather than one turned sideways -
+which trades width for height.
+
 ![Image](cosmic-applet-minimon.png)
 
 
